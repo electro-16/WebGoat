@@ -12,10 +12,10 @@ pipeline {
            '''
       }
     }
-   stage ('Build') {
-     steps {
-       sh 'mvn clean install -DskipTests'
-     }
-    }
+    stage ('Generate build') {
+      steps {
+        sh 'mvn clean install -DskipTests'
+      }
+    }  
   }
 }
