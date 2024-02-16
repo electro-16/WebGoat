@@ -50,28 +50,47 @@ pipeline {
       }
     }
 	  
-   stage ('Build') {
-     steps {
-       sh 'mvn clean package'
-     }
-    }
-    stage ('Deploy-To-Tomcat') {
-      steps  {
-        sshagent (['tomcat']) {
-          sh 'scp -o StrictHostKeyChecking=no target/*.war ubuntu@3.83.33.221:/prod/apache-tomcat-8.5.98/webapps/webapp.war'
-        }
+  stage ('Generate build') {
+      steps {
+        sh 'mvn clean install -DskipTests'
       }
-  }
-
-	 stage ('Dynamic analysis') {
+    }  
+	  
+    stage ('Deploy to server') {
             steps {
-           sshagent(['zap']) {
-                sh 'ssh -o  StrictHostKeyChecking=no ubuntu@44.202.238.69 "sudo docker run -t owasp/zap2docker-stable zap-full-scan.py -t http://3.83.33.221:8080/webapp" '
-		   // sh 'ssh -o  StrictHostKeyChecking=no ubuntu@3.91.196.22 "sudo docker run -t owasp/zap2docker-stable zap-baseline.py -t http://44.203.175.196:8080/webapp" '
-		//sh 'ssh -o  StrictHostKeyChecking=no ubuntu@65.1.84.186 "sudo ./zap_report.sh"'
+           sshagent(['application_server']) {
+                sh 'scp -o StrictHostKeyChecking=no /var/lib/jenkins/workspace/DemoProject/webgoat-server/target/webgoat-server-v8.2.0-SNAPSHOT.jar ubuntu@65.1.2.60:/WebGoat'
+		sh 'ssh -o  StrictHostKeyChecking=no ubuntu@65.1.2.60 "nohup java -jar /WebGoat/webgoat-server-v8.2.0-SNAPSHOT.jar &"'
+              }      
+           }     
+    }
+   
+    stage ('Dynamic analysis') {
+            steps {
+           sshagent(['application_server']) {
+                sh 'ssh -o  StrictHostKeyChecking=no ubuntu@65.1.84.186 "sudo docker run --rm -v /home/ubuntu:/zap/wrk/:rw -t owasp/zap2docker-stable zap-full-scan.py -t http://65.1.2.60/WebGoat -x zap_report || true" '
+		sh 'ssh -o  StrictHostKeyChecking=no ubuntu@65.1.84.186 "sudo ./zap_report.sh"'
               }      
            }       
+    }
+  
+    stage ('Host vulnerability assessment') {
+        steps {
+             sh 'echo "In-Progress"'
+            }
+    }
+
+   stage ('Security monitoring and misconfigurations') {
+        steps {
+             sh './securityhub.sh'
+            }
+    }
+	
+   stage ('Incidents report') {
+        steps {
+          sh './final_report.sh'
+        }
     }	  
 	  
-}
+   }  
 }
